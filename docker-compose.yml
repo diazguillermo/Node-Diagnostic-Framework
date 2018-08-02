@@ -1,0 +1,21 @@
+version: '2'
+
+services:
+    sdfservice:
+        mem_limit: 100m
+        hostname: sdfservice-app
+        domainname: dtveng.net
+        container_name: sdfservice-app
+        restart: always
+        build: .
+        volumes:
+            - ./tmp/test:/tmp/test
+        ports:
+            - 8080:8080
+        environment:
+            - USERVAR=123
+        networks:
+            - default
+networks:
+ default:
+   driver : bridge
