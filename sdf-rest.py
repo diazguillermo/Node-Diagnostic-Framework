@@ -1,7 +1,11 @@
-from bottle import route, run, debug, template, request
+import bottle
+from bottle import route, run, debug, template, request, error, redirect, response
+import sys
 import shlex
 import sqlite3
 from subprocess import call, Popen, PIPE
+
+avail_tests = ["OVLivePodNodePairPerfTest", "OVLiveEndpointHealthCheck", "OVLiveCertificateExpiryTest"]
 
 @route('/new', method='POST')
 def newTest():
@@ -9,7 +13,7 @@ def newTest():
     conn = sqlite3.connect('tests.db')
     c = conn.cursor()
 
-    c.execute("INSERT INTO tests (name) VALEUS (?)", (new,))
+    c.execute("INSERT INTO tests (name) VALUES (?)", (new,))
     new_id = c.lastrowid
 
     conn.commit()
@@ -17,45 +21,90 @@ def newTest():
 
     return '</p> New test saved with ID %s</p>' % new_id
 
-@route('/listOVLiveDiagTestsOnPod/<pod>')
-def listTests(pod):
-    conn = sqlite3.connect('tests.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM tests")
-    result = c.fetchall()
-    c.close()
+@route('/hello')
+def hello():
+    return "\nSDF-Service Running. Use \"/listOVLiveDiagTestsOnPod\" for available diagnostic tests.\n"
 
-    output = template('make_table', rows=result)
+@route('/listPodTests/html')
+@route('/listOVLiveDiagTestsOnPod/html')
+@route('/listovlivediagtestsonpod/html')
+def listTests():
+    output = template('make_table', rows=avail_tests)
     return output
 
-@route('/listOVLiveDiagTestsOnPod/<pod>/JSON')
-def listTestsJSON(pod):
-    conn = sqlite3.connect('tests.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM tests")
-    result = c.fetchall()
-    c.close()
-    tests = [i[1] for i in result]
+@route('/listPodTests')
+@route('/listOVLiveDiagTestsOnPod')
+@route('/listovlivediagtestsonpod')
+def listTestsJSON():
+    # tests = [i[1] for i in result]
 
     jason = dict({"OV Live List of Diagnostic Tests on Pod": {}})
-    for i in range(len(tests)):
-        jason["OV Live List of Diagnostic Tests on Pod"][i] = tests[i]
+    for i in range(len(avail_tests)):
+        jason["OV Live List of Diagnostic Tests on Pod"][i] = avail_tests[i]
 
     return jason
 
-@route('/run/OVLivePodNodePairPerfTest/<node1>/<node2>')
+@route('/test/<node1>/<node2>')
+def iptest(node1, node2):
+    return (node1, node2)
+
+@route('/perf/run/<node1>/<node2>')
+@route('/OVLivePodNodePairPerfTest/run/<node1>/<node2>')
+@route('/ovlivepodnodepairperftest/run/<node1>/<node2>')
 def runPerf(node1, node2):
-    p1 = Popen(["iperf3", "-s", "-p", "2018", "-1"], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    p2 = Popen(["iperf3", "-c", "192.168.64.130", "-p", "2018"], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    output, err = p2.communicate(b"input data that is passed to subprocess")
-    rc = p2.returncode
+    n1 = Popen(shlex.split("ssh -i .ssh/vos-bm-poc.pem centos@"+node1+" iperf3 -s -p 2018 -1 -D"), stdout=PIPE, shell=False)
+    # n1_serve = Popen(shlex.split("1"), stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=False)
+    
+    out1 = n1.communicate()[0]
+
+    n2 = Popen(shlex.split("ssh -i .ssh/vos-bm-poc.pem centos@"+node2+" iperf3 -c "+node1+" -p 2018"), stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=False)
+    # n2_conn = Popen(shlex.split("iperf3 -c "+node1+" -p 2018"), stdin=PIPE, stdout=PIPE, stderr=PIP, shell=False)
+
+    output, err = n2.communicate(b"input data that is passed to subprocess")
+    rc = n2.returncode
+
+
+    
+
+
+
+    # p1 = Popen(["iperf3", "-s", "-p", "2018", "-1"], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    # p2 = Popen(["iperf3", "-c", "192.168.64.130", "-p", "2018"], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    # output, err = p2.communicate(b"input data that is passed to subprocess")
+    # rc = p2.returncode
     code = "PASS" if err == '' else "FAIL"
     status = "Node \"" + str(node1) + "\" and Node \"" + str(node2) + "\" Connection Successful"
     details = output
     json = {"OVLive Pod Node Pair iPerf Test": {"Result Code": code, "Result Status": status, "Result Details": details}}
     return json
 
+@route('/perf/local/run')
+def localPerf():
+    p1 = Popen(shlex.split("iperf3 -s -p 2010 -1"), stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    p2 = Popen(shlex.split("iperf3 -c 127.0.0.1 -p 2010 | json_pp -t json"), stdin=PIPE, stdout=PIPE, stderr=PIPE)
+
+    out1 = p2.communicate()[0]
+    
+    output, err = p2.communicate(b"input data that is passed to subprocess")
+    rc = p2.returncode
+    code = "PASS" if err == '' else "FAIL"
+    status = " Connection Successful"
+    details = output
+    json = {"OVLive Pod Node Pair iPerf Test": {"Result Code": code, "Result Status": status, "Result Details": details}}
+    return json
+
+@route('/pairPerf/help')
+@route('/OVLivePodNodePairPerfTest/help')
+@route('/ovlivepodnodepairperftest/help')
+def perfHelp():
+    return """Usage: /run/OVLivePodNodePairPerfTest/<node1>/<node2>\n 
+            node1 = IP address of first node in pair to check connection\n
+            node2 = IP address of other node in pair to check connection\n\n
+            You may also use the short-hand /run/pairPerf/<node1><node2>
+            for the same results."""
+
 @route('/run/util/<node>')
+@route('/OVLiveNodeUtilizationCheck/run/<node>')
 def runUtil(node):
     inp = ["top", "-b", "-n", "2", "|", "grep", "-i", "\"Cpu(s)\"", "|", "cut", "-d", "' '", "-f11", "|", "awk",
             "'{p = 100-$1} END {print p, \"% CPU Usage\"}\'", ";", 
@@ -99,37 +148,46 @@ def runUtil(node):
     return out
 
 @route('/run/endpointHealth')
+@route('/run/OVLiveEndpointHealthCheck')
 def runEndpoints():
-    endpoints = ['2018', '2009', '2020', '8081', '3456']
+    endpoints = ["10.27.234.201", "10.27.234.202", "10.27.234.203", "10.27.234.204", "10.27.234.205", "10.27.234.206", "10.27.234.207",
+                 "10.27.234.208", "10.27.234.209", "10.27.234.210", "10.27.234.211", "10.27.234.212", "10.27.234.213",
+                 "10.27.234.214", "10.27.234.215"]
     out = []
-    '''
-    for i in range(len(endpoints)-1):
-        serve_start = Popen(shlex.split("python -m SimpleHTTPServer 2018"), stdout=PIPE, shell=False)
-        servers.append(serve_start)
-    
-    for end in endpoints:
-        attempt = Popen(shlex.split("curl localhost:"+end), stdout=PIPE, shell=False)
-        res = attempt.communicate()[0]
-        out.append(res)
-        '''
 
     passes = []
     for end in endpoints:
-        p = Popen(shlex.split("curl localhost:"+end), stdout=PIPE, shell=False)
-        res = p.communicate()
-        if res[0] == '':
-            passes.append(False)
-            out.append("Port["+end+"]: Fail\n")
-        else:
+        p = Popen(shlex.split("ping -c 1 -w 3 "+end), stdout=PIPE, shell=False)
+        res = str(p.communicate()[0])
+	
+        loss = res[res.find(" ", res.find("% packet loss")-3)+1:res.find("% packet loss")]
+
+        if int(loss) == 0:
             passes.append(True)
-            out.append("Port["+end+"]: Success\n")
+            out.append(end+": Connection Success\n")
+        else:
+            passes.append(False)
+            out.append(end+": Connection Success\n")
 
     code = "PASS" if all(passes) else "FAIL"
     status = str(sum(passes)) + "/" + str(len(passes)) + " Connections Successful"
-    json = {"OVLive Pod Service Endpoint Health Check": {"Result Code": code, "Result Status": status, "Result Details": out}}
+    json = {"OVLive Pod Service Endpoint Health Check": {"Result Code": code, "Result Status": status, "Result Details": out}
+           }
     return json
 
+@route('/help/endpointHealth')
+@route('/help/OVLiveCheckEndpointHealthCheck')
+def endpointHealthHelp():
+    return """
+Usage:  /run/OVLiveCheckEndpointHealthTest\n
+Returns JSON of resullts\n
+Result Code will be PASS if all endpoints are healthy, FAIL otherwise
+Result Status will display number of healthy endpoints out of total
+Result Details will contain the details of which endpoints are healthy or not\n
+"""
+
 @route('/run/certificate')
+@route('/run/OVLiveCertificateExpiryTest')
 def runCertificateCheck():
     p = Popen(shlex.split("openssl s_client -showcerts -connect localhost:2018"), stdout=PIPE, shell=False)
     out = p.communicate()[0]
@@ -150,5 +208,22 @@ def runDocker():
 
     return out
 
+@error(404)
+def error404(error):
+    return "Wrong URL"
+    return redirect("/hello")
 
-run(host='0.0.0.0', port=8080, debug=True)
+def fix_environ_middleware(app):
+    def fixed_app(environ, start_response):
+        environ['wsgi.url_scheme'] = 'https'
+        environ['HTTP_X_FORWARDED_HOST'] = '10.27.204.232:8080'
+        return app(environ, start_response)
+    return fixed_app
+
+
+app = bottle.default_app()
+app.wsgi = fix_environ_middleware(app.wsgi)
+
+portnum = 8000 if len(sys.argv) < 2 else sys.argv[1]
+run(host='0.0.0.0', port=portnum, debug=True)
+sys.exit(1)
