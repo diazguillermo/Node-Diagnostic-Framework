@@ -52,30 +52,37 @@ def iptest(node1, node2):
 @route('/OVLivePodNodePairPerfTest/run/<node1>/<node2>')
 @route('/ovlivepodnodepairperftest/run/<node1>/<node2>')
 def runPerf(node1, node2):
-    n1 = Popen(shlex.split("ssh -i .ssh/vos-bm-poc.pem centos@"+node1+" iperf3 -s -p 2018 -1 -D"), stdout=PIPE, shell=False)
+    fire1 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/vos-bm-poc.pem centos@"+node1+" \"sudo firewall-cmd --zone=public --add-port=2018/tcp --permanent ; sudo firewall-cmd --reload\""), stdout=PIPE, shell=False) 
+    fireout1 = fire1.communicate()[0]
+
+    fire2 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/vos-bm-poc.pem centos@"+node2+" \"sudo firewall-cmd --zone=public --add-port=2018/tcp --permanent ; sudo firewall-cmd --reload\""), stdout=PIPE, shell=False) 
+
+
+    setup1 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/vos-bm-poc.pem centos@"+node1+" sudo yum install iperf3 -y"), stdout=PIPE, shell=False)
+    out0, err0 = setup1.communicate()
+    if err0 == None : err0 = "No Err"
+
+    setup2 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/vos-bm-poc.pem centos@"+node2+" sudo yum install iperf3 -y"), stdout=PIPE, shell=False)
+    out02, err02 = setup2.communicate()
+    if err02 == None: err0 = "No Err"
+
+    n1 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/vos-bm-poc.pem centos@"+node1+" iperf3 -s -p 2018 -1 -D"), stdout=PIPE, shell=False)
     # n1_serve = Popen(shlex.split("1"), stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=False)
     
     out1 = n1.communicate()[0]
 
-    n2 = Popen(shlex.split("ssh -i .ssh/vos-bm-poc.pem centos@"+node2+" iperf3 -c "+node1+" -p 2018"), stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=False)
+    n2 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/vos-bm-poc.pem centos@"+node2+" iperf3 -c "+node1+" -p 2018"), stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=False)
     # n2_conn = Popen(shlex.split("iperf3 -c "+node1+" -p 2018"), stdin=PIPE, stdout=PIPE, stderr=PIP, shell=False)
 
     output, err = n2.communicate(b"input data that is passed to subprocess")
     rc = n2.returncode
 
-
     
-
-
-
-    # p1 = Popen(["iperf3", "-s", "-p", "2018", "-1"], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    # p2 = Popen(["iperf3", "-c", "192.168.64.130", "-p", "2018"], stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    # output, err = p2.communicate(b"input data that is passed to subprocess")
-    # rc = p2.returncode
     code = "PASS" if err == '' else "FAIL"
     status = "Node \"" + str(node1) + "\" and Node \"" + str(node2) + "\" Connection Successful"
     details = output
     json = {"OVLive Pod Node Pair iPerf Test": {"Result Code": code, "Result Status": status, "Result Details": details}}
+    return output
     return json
 
 @route('/perf/local/run')
@@ -224,6 +231,6 @@ def fix_environ_middleware(app):
 app = bottle.default_app()
 app.wsgi = fix_environ_middleware(app.wsgi)
 
-portnum = 8000 if len(sys.argv) < 2 else sys.argv[1]
+portnum = 8080 if len(sys.argv) < 2 else sys.argv[1]
 run(host='0.0.0.0', port=portnum, debug=True)
 sys.exit(1)

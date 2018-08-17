@@ -10,8 +10,10 @@ services:
         build: .
         volumes:
             - ./tmp/test:/tmp/test
+            - ~/.ssh:/~/.ssh
         ports:
-            - 8080:8080
+            - 8000:8000
+            - 2010:2010
         environment:
             - USERVAR=123
         networks:
