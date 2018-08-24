@@ -48,9 +48,11 @@ def listTestsJSON():
 def iptest(node1, node2):
     return (node1, node2)
 
+
 @route('/perf/run/<node1>/<node2>')
 @route('/OVLivePodNodePairPerfTest/run/<node1>/<node2>')
 @route('/ovlivepodnodepairperftest/run/<node1>/<node2>')
+
 def runPerf(node1, node2):
     fire1 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/vos-bm-poc.pem centos@"+node1+" \"sudo firewall-cmd --zone=public --add-port=2018/tcp --permanent ; sudo firewall-cmd --reload\""), stdout=PIPE, shell=False) 
     fireout1 = fire1.communicate()[0]
@@ -84,6 +86,45 @@ def runPerf(node1, node2):
     json = {"OVLive Pod Node Pair iPerf Test": {"Result Code": code, "Result Status": status, "Result Details": details}}
     return output
     return json
+
+"""
+@route('/perf/run/<node1>/<node2>')
+@route('/OVLivePodNodePairPerfTest/run/<node1>/<node2>')
+@route('/ovlivepodnodepairperftest/run/<node1>/<node2>')
+def runPerfUbuntu(node1, node2):
+    fire1 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/id_rsa ubuntu@"+node1+" sudo ufw allow 2018/tcp "), stdout=PIPE, shell=False) 
+    fireout1 = fire1.communicate()[0]
+
+    fire2 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/id_rsa ubuntu@"+node2+" sudo ufw allow 2018/tcp "), stdout=PIPE, shell=False) 
+
+
+    setup1 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/id_rsa ubuntu@"+node1+" \"sudo apt-get update -y ; sudo apt-get install iperf3 -y\" "), stdout=PIPE, shell=False)
+    out0, err0 = setup1.communicate()
+    if err0 == None : err0 = "No Err"
+
+    setup2 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/id_rsa ubuntu@"+node2+" \"sudo apt-get update -y ; sudo apt-get install iperf3 -y\" "), stdout=PIPE, shell=False)
+    out02, err02 = setup2.communicate()
+    if err02 == None: err0 = "No Err"
+
+    n1 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/id_rsa ubuntu@"+node1+" iperf3 -s -p 2018 -1 -D"), stdout=PIPE, shell=False)
+    # n1_serve = Popen(shlex.split("1"), stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=False)
+    
+    out1 = n1.communicate()[0]
+
+    n2 = Popen(shlex.split("ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no -i .ssh/id_rsa ubuntu@"+node2+" iperf3 -c "+node1+" -p 2018"), stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=False)
+    # n2_conn = Popen(shlex.split("iperf3 -c "+node1+" -p 2018"), stdin=PIPE, stdout=PIPE, stderr=PIP, shell=False)
+
+    output, err = n2.communicate(b"input data that is passed to subprocess")
+    rc = n2.returncode
+
+    
+    code = "PASS" if err == '' else "FAIL"
+    status = "Node \"" + str(node1) + "\" and Node \"" + str(node2) + "\" Connection Successful"
+    details = output
+    json = {"OVLive Pod Node Pair iPerf Test": {"Result Code": code, "Result Status": status, "Result Details": details}}
+    return output
+    return json
+"""
 
 @route('/perf/local/run')
 def localPerf():
